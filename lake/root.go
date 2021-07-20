@@ -31,27 +31,26 @@ var ErrPoolNotFound = errors.New("pool not found")
 // pool configs in a json file without concurrency control.  We should
 // make this use a journal and check for update conflicts.
 type Root struct {
-	engine   storage.Engine
-	path     *storage.URI
-	poolPath *storage.URI
+	engine    storage.Engine
+	path      *storage.URI
+	poolPath  *storage.URI
+	indexPath *storage.URI
 }
 
 var _ proc.DataAdaptor = (*Root)(nil)
 
 type Config struct {
-	Version int           `zng:"version"`
-	Pools   []PoolConfig  `zng:"pools"`
-	Indices index.Indices `zng:"indices"`
+	Version int                      `zng:"version"`
+	Pools   []PoolConfig             `zng:"pools"`
+	Indices map[string]index.Indices `zng:"indices"`
 }
 
 func newRoot(engine storage.Engine, path *storage.URI) *Root {
 	return &Root{
-		engine: engine,
-		path:   path,
-		//XXX For now this is just a json file with races,
-		// but we'll eventually put this in a mutable journal.
-		// See issue #2547.
-		poolPath: path.AppendPath("pools.json"),
+		engine:    engine,
+		path:      path,
+		poolPath:  path.AppendPath("pools"),
+		indexPath: path.AppendPath("index"),
 	}
 }
 
@@ -292,7 +291,7 @@ func (r *Root) RemovePool(ctx context.Context, id ksuid.KSUID) error {
 	return r.storeConfig(ctx, config)
 }
 
-func (r *Root) AddIndex(ctx context.Context, indices []index.Index) error {
+func (r *Root) xAddIndex(ctx context.Context, indices []index.Index) error {
 	config, err := r.loadConfig(ctx)
 	if err != nil {
 		return err
@@ -300,9 +299,10 @@ func (r *Root) AddIndex(ctx context.Context, indices []index.Index) error {
 	updated := config.Indices
 	for _, idx := range indices {
 		var existing *index.Index
-		if updated, existing = updated.Add(idx); existing != nil {
-			return fmt.Errorf("index %s is a duplicate of index %s", idx.ID, existing.ID)
-		}
+		/*
+			if updated, existing = updated.Add(idx); existing != nil {
+				return fmt.Errorf("index %s is a duplicate of index %s", idx.ID, existing.ID)
+			}*/
 	}
 	config.Indices = updated
 	return r.storeConfig(ctx, config)
